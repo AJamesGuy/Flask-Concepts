@@ -1,5 +1,5 @@
 from .models import db
-from app import create_app
+from .app import create_app
 
 app = create_app('DevelopmentConfig')
 
@@ -7,12 +7,3 @@ with app.app_context():
     db.create_all()
 
 app.run()
-
-
-
-
-
-
-
-
-
