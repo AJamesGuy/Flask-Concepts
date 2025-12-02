@@ -1,10 +1,10 @@
-
 from . import books_bp
 from .schemas import book_schema, books_schema
 from flask import request, jsonify
 from marshmallow import ValidationError
 from app.models import Books, db
 from app.extensions import limiter, cache
+from sqlalchemy import select
 
 #Create Book Endpoint
 @books_bp.route('', methods=['POST'])
@@ -24,10 +24,15 @@ def create_book():
 @books_bp.route('', methods=['GET'])
 @cache.cached(timeout=90)
 def get_books():
-    books = db.session.query(Books).all()
-    return books_schema.jsonify(books), 200
-
-
+    try: 
+        page = int(request.args.get('page'))
+        per_page = int(request.args.get('per_page'))
+        query = select(Books)
+        books = db.paginate(query, page=page, per_page=per_page) #Handles our pagination for us
+        return books_schema.jsonify(books), 200
+    except:
+        books = db.session.query(Books).all()
+        return books_schema.jsonify(books), 200
 #UPDATE BOOK
 @books_bp.route('/<int:book_id>', methods=['PUT'])
 @limiter.limit("30 per hour")
@@ -57,3 +62,26 @@ def delete_book(book_id):
     db.session.delete(book)
     db.session.commit()
     return jsonify(f"Successfully deleted book {book_id}")
+
+@books_bp.route('/popularity', methods=['GET'])
+def get_popular_books():
+    books = db.session.query(Books).all()
+    books.sort(key=lambda book: len(book.loans), reverse=True)
+
+    output = []
+    for book in books[:5]:
+        book_format = {
+            "book": book_schema.dump(book),
+            "readers": len(book.loans)
+        }
+        output.append(book_format)
+
+    return books_schema.jsonify(books[:5]), 200
+
+books_bp.route('/search', methods=['GET'])
+def search_books():
+    title = request.args.get('title')
+
+    books = db.session.query(Books).where(Books.title.ilike(f"%{title}%")).all()
+
+    return books_schema.jsonify(books), 200
